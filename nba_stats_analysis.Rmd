@@ -35,7 +35,7 @@ Czy wyżsi zawodnicy mają większą liczbę zbiórek ofensywnych (\texttt{OREB}
 
 # Wczytanie i obróbka danych
 ```{r}
-player_stats <- read.csv(file = "/Users/maksy/UG/Wnioskowanie_Statystyczne/players_stats.csv")
+player_stats <- read.csv(file = "players_stats.csv")
 colnames(player_stats)[colnames(player_stats) == "FT."] <- "FTP"
 ```
 
@@ -405,6 +405,7 @@ Ostatecznie wzrost sam w sobie nie zawsze jest decydujący, ale wpływa na dobó
 \end{itemize}
 
 Nasza analiza pokazuje, że wpływ wzrostu zawodnika na statystyki gry w koszykówce jest zauważalny, szczególnie w kontekście zbiórek ofensywnych i bloków. Jednak zależności te nie są proste i wymagają uwzględnienia dodatkowych czynników, takich jak pozycja zawodnika oraz wynikające z niej zadania na boisku. W szczególności statystyki związane z rzutami za trzy punkty i skutecznością rzutów osobistych są bardziej zależne od roli zawodnika niż od jego wzrostu. Warto podkreślić, że nasza analiza skupiała się na podstawowych zależnościach i nie obejmowała bardziej szczegółowych czynników, które mogłyby pogłębić te wnioski.
+
 
 
 
