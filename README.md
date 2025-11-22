@@ -12,6 +12,6 @@ Dane pochodzą ze statystyk NBA (2014/2015) dostępnych publicznie m.in. w Baske
 - tidyverse (ggplot2, dplyr)  
 - stats  
 - R Markdown
-- 
+
 ## Współautorzy
 Projekt został wykonany wspólnie z: Maksym Dunajewski
