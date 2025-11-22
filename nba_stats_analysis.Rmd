@@ -1,0 +1,417 @@
+---
+title: "Wnioskowanie Statystyczne"
+author: "Maksym Dunajewski, Idzi Łopatniuk"
+date: "2025-01-24"
+output: pdf_document
+---
+
+#Załadowanie potrzebnych bibliotek
+```{r}
+library(dplyr)
+library(grid)
+library(ggplot2)
+```
+
+\section*{Zbiór danych}
+Zbiór danych \texttt{players\_stats.csv} zawiera statystyki indywidualne zawodników NBA z sezonu 2014/2015. Dane obejmują szeroki zakres metryk, takich jak liczba zdobytych punktów, zbiórek, asyst, skuteczność rzutów oraz inne szczegóły związane z grą zawodników.
+
+\subsection*{Zmienne}
+\begin{tabular}{ll}
+\textbf{Zmienna} & \textbf{Opis} \\
+\hline
+\texttt{Name} & Imię i nazwisko gracza \\
+\texttt{X3PM} & Średnia liczba celnych rzutów za trzy punkty na mecz \\
+\texttt{FTP} & Skuteczność rzutów osobistych \\
+\texttt{OREB} & Średnia liczba zbiórek ofensywnych na mecz \\
+\texttt{BLK} & Średnia liczba bloków ofensywnych na mecz \\
+\texttt{Height} & Wzrost zawodnika (cm) \\
+\texttt{Pos} & Pozycja zawodnika (\texttt{PG}, \texttt{SG}, \texttt{SF}, \texttt{PF}, \texttt{C}) \\
+\end{tabular}
+
+\subsection*{Hipoteza}
+Czy wyżsi zawodnicy mają większą liczbę zbiórek ofensywnych (\texttt{OREB}) oraz bloków (\texttt{BLK}), ale jednocześnie osiągają gorsze wyniki w skuteczności, zdobywając mniej punktów za trzy (\texttt{X3PM}) i wykazując niższą skuteczność rzutów osobistych (\texttt{FTP}) w porównaniu do niższych zawodników?
+
+
+
+# Wczytanie i obróbka danych
+```{r}
+player_stats <- read.csv(file = "/Users/maksy/UG/Wnioskowanie_Statystyczne/players_stats.csv")
+colnames(player_stats)[colnames(player_stats) == "FT."] <- "FTP"
+```
+
+# Stworzenie nowej ramki danych z interesującymi nas zmiennymi
+```{r}
+new_stats <- data.frame(
+  Name = player_stats$Name,
+  X3PM = player_stats$X3PM / player_stats$Games.Played,
+  FTP = player_stats$FTP/100,
+  OREB = player_stats$OREB / player_stats$Games.Played,
+  BLK = player_stats$BLK / player_stats$Games.Played,
+  Height = player_stats$Height,
+  Pos = player_stats$Pos
+)
+```
+
+#usunięcie wierszy zawierających wartości NA
+```{r}
+player_stats_clean <- na.omit(new_stats)
+```
+
+#Podzielenie zawodników na dwie grupy wzrostowe
+```{r}
+# Obliczenie mediany wzrostu
+median_height <- median(player_stats_clean$Height, na.rm = TRUE)
+
+# Tworzenie grup wzrostu
+player_stats_clean$Height_Group <- ifelse(
+  player_stats_clean$Height < median_height, "Niski", "Wysoki"
+)
+```
+
+
+# Obliczanie średnich wartości dla każdej grupy wzrostu
+```{r}
+player_stats_clean %>%
+  group_by(Height_Group) %>%
+  summarise(
+    mean_oreb = mean(OREB),
+    mean_blk = mean(BLK),
+    mean_3pm = mean(X3PM),
+    mean_ftp = mean(FTP)
+  )
+
+```
+
+# Wstępne wykresy dla naszych statystyk
+Boxploty
+```{r}
+# Boxplot dla zbiórek ofensywnych
+plot_oreb <- ggplot(player_stats_clean, aes(x = Height_Group, y = OREB)) +
+  geom_boxplot(fill = "skyblue") +
+  labs(title = "Zbiórki ofensywne, a grupa wzrostu", x = "Grupa wzrostu", y = "Zbiórki ofensywne na mecz")
+
+# Boxplot dla bloków
+plot_blk <- ggplot(player_stats_clean, aes(x = Height_Group, y = BLK)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Bloki, a grupa wzrostu", x = "Grupa wzrostu", y = "Bloki na mecz")
+
+# Wyświetlenie dwóch wykresów obok siebie
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(1, 2)))
+
+print(plot_oreb, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(plot_blk, vp = viewport(layout.pos.row = 1, layout.pos.col = 2))
+
+```
+```{r}
+# Boxplot dla rzutów za 3 punkty
+plot_oreb <- ggplot(player_stats_clean, aes(x = Height_Group, y = X3PM)) +
+  geom_boxplot(fill = "skyblue") +
+  labs(title = "Rzuty za 3 punkty, a grupa wzrostu", x = "Grupa wzrostu", y = "Rzuty za 3 punkty")
+
+# Boxplot dla rzutów osobistych
+plot_blk <- ggplot(player_stats_clean, aes(x = Height_Group, y = FTP)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Rzuty osobiste, a grupa wzrostu", x = "Grupa wzrostu", y = "Rzuty osobiste")
+
+# Wyświetlenie dwóch wykresów obok siebie
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(1, 2)))
+
+print(plot_oreb, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(plot_blk, vp = viewport(layout.pos.row = 1, layout.pos.col = 2))
+
+```
+Przeprowadzenie testów ANOVA, aby sprawdzić czy róźnice między grupami wzrostu są statystycznie istotne.
+```{r}
+# ANOVA dla zbiórek ofensywnych
+anova_oreb <- aov(OREB ~ Height_Group, data = player_stats_clean)
+summary(anova_oreb)
+
+# ANOVA dla bloków
+anova_blk <- aov(BLK ~ Height_Group, data = player_stats_clean)
+summary(anova_blk)
+
+# ANOVA dla celnych rzutów za trzy
+anova_3pm <- aov(X3PM ~ Height_Group, data = player_stats_clean)
+summary(anova_3pm)
+
+# ANOVA dla rzutów wolnych
+anova_ftp <- aov(FTP ~ Height_Group, data = player_stats_clean)
+summary(anova_ftp)
+```
+\section*{Wyniki testów ANOVA}
+
+Wyniki testów ANOVA wykazały istotne statystycznie różnice między grupami zawodników (\textbf{Niski} i \textbf{Wysoki}) we wszystkich analizowanych zmiennych:
+
+\begin{enumerate}
+    \item \textbf{Zbiórki ofensywne (OREB):} Wyżsi zawodnicy osiągają znacząco więcej zbiórek ofensywnych (średnia = 1.23) niż niżsi zawodnicy (średnia = 0.42, \( p < 0.001 \)).
+    \item \textbf{Bloki (BLK):} Wyżsi zawodnicy wykonują więcej bloków (średnia = 0.55) w porównaniu do niższych zawodników (średnia = 0.17, \( p < 0.001 \)).
+    \item \textbf{Punkty za trzy (X3PM):} Niżsi zawodnicy zdobywają więcej punktów za trzy (średnia = 0.92) niż wyżsi zawodnicy (średnia = 0.50, \( p < 0.001 \)).
+    \item \textbf{Skuteczność rzutów osobistych (FTP):} Niżsi zawodnicy mają wyższą skuteczność rzutów osobistych (średnia = 0.74) w porównaniu do wyższych zawodników (średnia = 0.68, \( p < 0.01 \)).
+\end{enumerate}
+
+\section*{Zależności między wzrostem a statystykami}
+
+Aby dokładniej zbadać wpływ wzrostu na poszczególne statystyki, przeprowadzono dalszą analizę regresji, która pozwala lepiej zrozumieć te zależności:
+\begin{itemize}
+    \item Zbiórki ofensywne (\textbf{OREB}): Wyższy wzrost jest istotnie związany z większą liczbą zbiórek ofensywnych. Każdy dodatkowy cal wzrostu zwiększa średnią liczbę zbiórek o 0.051 (\( p < 0.001 \)).
+    \item Bloki (\textbf{BLK}): Wyższy wzrost istotnie zwiększa liczbę bloków. Każdy dodatkowy cal wzrostu zwiększa liczbę bloków o 0.026 (\( p < 0.001 \)).
+    \item Punkty za trzy (\textbf{X3PM}): Wyższy wzrost istotnie zmniejsza liczbę punktów zdobywanych za trzy. Każdy dodatkowy cal wzrostu zmniejsza średnią liczbę punktów o 0.028 (\( p < 0.001 \)).
+    \item Skuteczność rzutów osobistych (\textbf{FTP}): Wyższy wzrost wiąże się z nieznacznie niższą skutecznością rzutów osobistych. Każdy dodatkowy cal wzrostu obniża skuteczność o 0.358\% (\( p < 0.01 \)).
+\end{itemize}
+
+Te wyniki potwierdzają, że wzrost zawodnika ma znaczący wpływ na jego statystyki, ale szczegółowa analiza zależności między wzrostem a statystykami dla różnych pozycji jest konieczna, aby uwzględnić rolę i zadania zawodników w drużynie.
+
+```{r}
+# Regresja dla zbiórek ofensywnych
+model_oreb <- lm(OREB ~ Height, data = player_stats_clean)
+summary(model_oreb)
+
+# Regresja dla bloków
+model_blk <- lm(BLK ~ Height, data = player_stats_clean)
+summary(model_blk)
+
+# Regresja dla celnych rzutów za trzy
+model_3pm <- lm(X3PM ~ Height, data = player_stats_clean)
+summary(model_3pm)
+
+# Regresja dla rzutów wolnych
+model_ftp <- lm(FTP ~ Height, data = player_stats_clean)
+summary(model_ftp)
+
+```
+\section*{Wpływ wzrostu na parametry gry}
+
+\begin{enumerate}
+    \item \textbf{Zbiórki ofensywne (OREB):} Wyższy wzrost jest istotnie związany z większą liczbą zbiórek ofensywnych (\( p < 0.001 \)). Każdy dodatkowy cal wzrostu zwiększa średnią liczbę zbiórek o 0.051. Model wyjaśnia 29.25\% zmienności (\( R^2 = 0.2925 \)).
+    \item \textbf{Bloki (BLK):} Wyższy wzrost istotnie zwiększa liczbę bloków (\( p < 0.001 \)). Każdy dodatkowy cal wzrostu zwiększa liczbę bloków o 0.026. Model wyjaśnia 26.39\% zmienności (\( R^2 = 0.2639 \)).
+    \item \textbf{Punkty za trzy (X3PM):} Wyższy wzrost istotnie zmniejsza liczbę punktów zdobywanych za trzy (\( p < 0.001 \)). Każdy dodatkowy cal zmniejsza średnią liczbę punktów o 0.028. Model wyjaśnia 13.27\% zmienności (\( R^2 = 0.1327 \)).
+    \item \textbf{Skuteczność rzutów osobistych (FTP):} Wyższy wzrost wiąże się z nieznacznie niższą skutecznością rzutów osobistych (\( p < 0.01 \)). Każdy dodatkowy cal obniża skuteczność o 0.358\%. Model wyjaśnia 2.69\% zmienności (\( R^2 = 0.02688 \)).
+\end{enumerate}
+
+Wyniki naszej analizy wyraźnie wskazują, że wzrost zawodnika istotnie wpływa na kluczowe parametry gry, takie jak liczba zbiórek ofensywnych (\texttt{OREB}), liczba bloków (\texttt{BLK}), skuteczność rzutów osobistych (\texttt{FTP}) oraz liczba punktów zdobywanych rzutami za trzy punkty (\texttt{3PM}). Jednak, aby uzyskać pełny obraz, konieczne jest bliższe przyjrzenie się, jak te zależności rozkładają się w kontekście konkretnych pozycji zawodników.
+
+\section*{Czyli wszystko jasne?}
+
+Zawodnicy w koszykówce są przydzielani do określonych pozycji, takich jak \textbf{PG (Point Guard)}, \textbf{SG (Shooting Guard)}, \textbf{SF (Small Forward)}, \textbf{PF (Power Forward)} i \textbf{C (Center)}. Każda z tych pozycji wiąże się z odmiennymi zadaniami i rolami w drużynie:
+
+\begin{itemize}
+    \item \textbf{Rozgrywający (PG):} Skupiają się na prowadzeniu gry i tworzeniu okazji strzeleckich dla innych zawodników, co przekłada się na niższe wartości dla zbiórek i bloków, ale wyższą skuteczność rzutów za trzy punkty i osobistych.
+    \item \textbf{Rzucający obrońcy (SG):} Koncentrują się na zdobywaniu punktów, często z dystansu, dlatego ich parametry skuteczności (\texttt{FTP}, \texttt{3PM}) mogą być wyższe niż u zawodników grających pod koszem.
+    \item \textbf{Niscy skrzydłowi (SF):} Pełnią wszechstronne role, co może powodować większe zróżnicowanie w ich statystykach, zarówno w zdobywaniu punktów, jak i w zbiórkach.
+    \item \textbf{Silni skrzydłowi (PF) oraz centrzy (C):} Z racji swojej fizyczności i wzrostu, dominują w strefie podkoszowej, co skutkuje wyższymi średnimi w zbiórkach i blokach, ale niższą skutecznością rzutów osobistych i za trzy punkty.
+\end{itemize}
+
+Zadania przypisane do każdej pozycji w znacznym stopniu determinują priorytety zawodników i wpływają na ich statystyki. Dlatego, aby w pełni zrozumieć wpływ wzrostu na parametry gry, konieczne jest uwzględnienie pozycji zawodnika w dalszych testach. Analiza rozkładu tych zmiennych dla każdej pozycji pozwoli odpowiedzieć na pytanie, czy zaobserwowane różnice wynikają głównie z wzrostu, czy też z roli, jaką zawodnik pełni w drużynie.
+
+
+```{r}
+# ANOVA dla wzrostu w zależności od pozycji
+anova_height <- aov(Height ~ Pos, data = player_stats_clean)
+summary(anova_height)
+```
+
+```{r}
+# Boxplot wzrostu dla każdej pozycji
+ggplot(player_stats_clean, aes(x = Pos, y = Height, fill = Pos)) +
+  geom_boxplot() +
+  labs(
+    title = "Rozkład wzrostu zawodników w zależności od pozycji",
+    x = "Pozycja zawodnika",
+    y = "Wzrost (cm)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+\section*{Wpływ wzrostu na rolę zawodnika w drużynie}
+
+Obserwując zarówno rozkład wzrostu zawodników w zależności od pozycji na boisku, jak i wyniki analizy ANOVA, można zauważyć wyraźny wpływ wzrostu na przypisanie gracza do określonej roli w drużynie. \textbf{Centrzy (C)} wyróżniają się jako najwyżsi zawodnicy, podczas gdy \textbf{rozgrywający (PG)} mają najniższy wzrost, co odzwierciedla różnorodność zadań przypisanych do tych pozycji. Zawodnicy na pozostałych pozycjach, takich jak \textbf{SF (niski skrzydłowy)}, \textbf{SG (rzucający obrońca)} i \textbf{PF (silny skrzydłowy)}, zajmują miejsca pośrednie pod względem wzrostu. Ta zależność między wzrostem a pozycją znacząco wpływa na analizowane parametry gry, takie jak liczba rzutów za trzy punkty, zbiórki ofensywne czy skuteczność rzutów osobistych.
+
+Na przykład, \textbf{centrzy}, z racji swojego wzrostu i roli w strefie podkoszowej, oddają znacznie mniej rzutów za trzy punkty, co może zakłócać analizę wpływu samego wzrostu na tę statystykę. Podobnie, \textbf{niżsi zawodnicy}, grający na pozycjach \textbf{PG} czy \textbf{SG}, mają większą swobodę w wykonywaniu rzutów z dystansu, co może sugerować, że różnice w statystykach wynikają bardziej z pozycji niż ze wzrostu.
+
+```{r}
+# ANOVA dla każdej statystyki w zależności od pozycji
+anova_oreb <- aov(OREB ~ Pos, data = player_stats_clean)
+summary(anova_oreb)
+
+anova_blk <- aov(BLK ~ Pos, data = player_stats_clean)
+summary(anova_blk)
+
+anova_3pm <- aov(X3PM ~ Pos, data = player_stats_clean)
+summary(anova_3pm)
+
+anova_ftp <- aov(FTP ~ Pos, data = player_stats_clean)
+summary(anova_ftp)
+
+```
+
+```{r}
+# Boxploty dla każdej statystyki w zależności od pozycji
+ggplot(player_stats_clean, aes(x = Pos, y = OREB, fill = Pos)) +
+  geom_boxplot() +
+  labs(title = "Zbiórki ofensywne w zależności od pozycji", x = "Pozycja", y = "Zbiórki ofensywne") +
+  theme_minimal()
+
+ggplot(player_stats_clean, aes(x = Pos, y = BLK, fill = Pos)) +
+  geom_boxplot() +
+  labs(title = "Bloki w zależności od pozycji", x = "Pozycja", y = "Bloki") +
+  theme_minimal()
+
+ggplot(player_stats_clean, aes(x = Pos, y = X3PM, fill = Pos)) +
+  geom_boxplot() +
+  labs(title = "Rzuty za 3 punkty w zależności od pozycji", x = "Pozycja", y = "Rzuty za 3 punkty") +
+  theme_minimal()
+
+ggplot(player_stats_clean, aes(x = Pos, y = FTP, fill = Pos)) +
+  geom_boxplot() +
+  labs(title = "Skuteczność rzutów osobistych w zależności od pozycji", x = "Pozycja", y = "Skuteczność rzutów osobistych") +
+  theme_minimal()
+
+```
+Jak wynika zarówno z wykresów, jak i przeprowadzonych testów statystycznych, różnice w statystykach między pozycjami są zauważalne i statystycznie istotne.
+
+Aby wyeliminować te potencjalne zakłócenia i dokładniej przeanalizować wpływ wzrostu na statystyki gry, konieczne jest porównanie zawodników o różnym wzroście, ale grających na tej samej pozycji. Taka analiza pozwoli oddzielić wpływ wzrostu od zadań związanych z konkretną rolą na boisku i da bardziej precyzyjny obraz zależności między wzrostem a kluczowymi parametrami gry.
+
+```{r}
+# Zależność wzrostu i zbiórek ofensywnych
+plot_oreb <- ggplot(player_stats_clean, aes(x = Height, y = OREB, color = Pos)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  facet_wrap(~Pos) +
+  labs(
+    title = "Zależność wzrostu i zbiórek ofensywnych dla każdej pozycji",
+    x = "Wzrost (cm)",
+    y = "Zbiórki ofensywne"
+  ) +
+  theme_minimal()
+
+print(plot_oreb)
+```
+\section*{Zależność wzrostu i zbiórek ofensywnych (OREB)}
+\begin{itemize}
+    \item \textbf{Centrzy (C) i rzucający obrońcy (SG):} Wyraźna pozytywna zależność – wyżsi zawodnicy na tych pozycjach zbierają więcej piłek ofensywnych dzięki swojej przewadze fizycznej i grze bliżej kosza.
+    \item \textbf{Niscy skrzydłowi (SF), silni skrzydłowi (PF) i rozgrywający (PG):} Zależność niezauważalna – zbiórki ofensywne na tych pozycjach zależą bardziej od dynamiki i techniki niż od wzrostu.
+\end{itemize}
+
+```{r}
+# Zależność wzrostu i bloków
+plot_blk <- ggplot(player_stats_clean, aes(x = Height, y = BLK, color = Pos)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  facet_wrap(~Pos) +
+  labs(
+    title = "Zależność wzrostu i bloków dla każdej pozycji",
+    x = "Wzrost (cm)",
+    y = "Bloki"
+  ) +
+  theme_minimal()
+
+print(plot_blk)
+```
+
+\section*{Zależność wzrostu i bloków (BLK)}
+\begin{itemize}
+    \item \textbf{Centrzy (C), silni skrzydłowi (PF) i rzucający obrońcy (SG):} Wyraźna pozytywna zależność – wyżsi zawodnicy na tych pozycjach częściej blokują rzuty. Centrzy i silni skrzydłowi dominują w strefie podkoszowej, a rzucający obrońcy wykorzystują przewagę wzrostu w pojedynkach na obwodzie.
+    \item \textbf{Niscy skrzydłowi (SF) i rozgrywający (PG):} Brak wyraźnej zależności – liczba bloków jest niska, niezależnie od wzrostu, co wynika z ich zadań skupionych na obronie obwodu i kreowaniu gry.
+\end{itemize}
+
+```{r}
+# Zależność wzrostu i rzutów za trzy punkty
+plot_3pm <- ggplot(player_stats_clean, aes(x = Height, y = X3PM, color = Pos)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  facet_wrap(~Pos) +
+  labs(
+    title = "Zależność wzrostu i rzutów za trzy punkty dla każdej pozycji",
+    x = "Wzrost (cm)",
+    y = "Rzuty za trzy punkty"
+  ) +
+  theme_minimal()
+
+print(plot_3pm)
+```
+
+\section*{Zależność wzrostu i trafień za trzy punkty (X3PM)}
+\begin{itemize}
+    \item \textbf{Centrzy (C):} Zależność słabo zauważalna – centrzy rzadko trafiają za trzy punkty, a wzrost nie ma istotnego wpływu na ich skuteczność.
+    \item \textbf{Niscy skrzydłowi (SF), rzucający obrońcy (SG) i silni skrzydłowi (PF):} Wyżsi zawodnicy częściej trafiają za trzy punkty. Może to wynikać z rozwijających się umiejętności rzutowych nawet wśród wyższych graczy na tych pozycjach.
+    \item \textbf{Rozgrywający (PG):} Zależność odwrotna – niżsi zawodnicy trafiają więcej rzutów za trzy punkty, co jest zgodne z ich rolą na obwodzie i większą liczbą prób.
+\end{itemize}
+
+```{r}
+# Zależność wzrostu i skuteczności rzutów osobistych
+plot_ftp <- ggplot(player_stats_clean, aes(x = Height, y = FTP, color = Pos)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  facet_wrap(~Pos) +
+  labs(
+    title = "Zależność wzrostu i skuteczności rzutów osobistych dla każdej pozycji",
+    x = "Wzrost (cm)",
+    y = "Skuteczność rzutów osobistych"
+  ) +
+  theme_minimal()
+
+print(plot_ftp)
+```
+
+\section*{Zależność wzrostu i skuteczności rzutów osobistych (FTP)}
+\begin{itemize}
+    \item \textbf{Silni skrzydłowi (PF):} Wyraźna pozytywna zależność – wyżsi zawodnicy na tej pozycji mają wyższą skuteczność rzutów osobistych, co może wynikać z ich lepszej techniki lub większego doświadczenia w sytuacjach rzutowych.
+    \item \textbf{Centrzy (C), rozgrywający (PG), rzucający obrońcy (SG) i niscy skrzydłowi (SF):} Zależność bardzo słaba lub niezauważalna – skuteczność rzutów osobistych jest w dużej mierze niezależna od wzrostu na tych pozycjach.
+\end{itemize}
+
+```{r}
+# Regresja wieloraka dla zbiórek ofensywnych
+model_oreb_multi <- lm(OREB ~ Height + Pos, data = player_stats_clean)
+summary(model_oreb_multi)
+
+# Regresja wieloraka dla bloków
+model_blk_multi <- lm(BLK ~ Height + Pos, data = player_stats_clean)
+summary(model_blk_multi)
+
+# Regresja wieloraka dla celnych rzutów za trzy
+model_3pm_multi <- lm(X3PM ~ Height + Pos, data = player_stats_clean)
+summary(model_3pm_multi)
+
+# Regresja wieloraka dla rzutów wolnych
+model_ftp_multi <- lm(FTP ~ Height + Pos, data = player_stats_clean)
+summary(model_ftp_multi)
+```
+\section*{Analiza wpływu wzrostu i pozycji na statystyki gry}
+
+\begin{itemize}
+    \item \textbf{Zbiórki ofensywne (OREB):} Wzrost nie jest istotnym predyktorem (\( p = 0.173 \)), natomiast pozycja zawodnika odgrywa kluczową rolę – zawodnicy na pozycjach \texttt{PG}, \texttt{SF}, \texttt{SG} i \texttt{PF} zbierają mniej piłek niż centrzy (\( p < 0.001 \)).
+    \item \textbf{Bloki (BLK):} Zarówno wzrost (\( p = 0.005 \)), jak i pozycja (\( p < 0.001 \)) mają istotny wpływ. Wyżsi zawodnicy i gracze na pozycji \texttt{C} wykonują więcej bloków.
+    \item \textbf{Punkty za trzy (X3PM):} Wzrost nie ma znaczenia (\( p = 0.427 \)), ale zawodnicy na pozycjach \texttt{PG}, \texttt{SF}, \texttt{SG} i \texttt{PF} zdobywają więcej punktów za trzy niż centrzy (\( p < 0.01 \)).
+    \item \textbf{Skuteczność rzutów osobistych (FTP):} Wzrost nie jest istotny (\( p = 0.321 \)), a wyższą skuteczność rzutów osobistych mają gracze na pozycjach \texttt{PG} i \texttt{SG} (\( p < 0.05 \)).
+\end{itemize}
+
+
+\section*{Końcowe przemyślenia}
+
+Analiza wykazała, że wzrost zawodnika odgrywa istotną rolę w koszykówce, zarówno bezpośrednio, jak i pośrednio poprzez wpływ na przypisanie zawodnika do określonej roli na boisku. Wyżsi zawodnicy mają przewagę w statystykach związanych z grą pod koszem, takich jak bloki (\texttt{BLK}) i zbiórki ofensywne (\texttt{OREB}). Wynika to z ich fizycznych predyspozycji, które pozwalają im skuteczniej rywalizować w strefie podkoszowej, oraz z przypisanych im zadań defensywnych i zbiórkowych.
+
+Jednak zależności w innych statystykach, takich jak punkty za trzy (\texttt{X3PM}) i skuteczność rzutów osobistych (\texttt{FTP}), są bardziej złożone. Na pierwszy rzut oka wzrost ma na nie niekorzystny wpływ. Wyżsi zawodnicy, zwłaszcza centrzy i silni skrzydłowi, rzadziej trafiają za trzy i mają niższą skuteczność rzutów osobistych niż ich niżsi koledzy z drużyny. Kluczowym czynnikiem jest jednak pozycja zawodnika i wynikające z niej zadania:
+\begin{itemize}
+    \item Wyżsi zawodnicy są naturalnie przypisywani do ról podkoszowych (\texttt{C}, \texttt{PF}), co ogranicza ich udział w rzutach z dystansu.
+    \item Niżsi zawodnicy, jak rozgrywający (\texttt{PG}) i rzucający obrońcy (\texttt{SG}), mają role skoncentrowane na kreowaniu i realizacji rzutów z dystansu, co tłumaczy ich lepsze wyniki w \texttt{X3PM} i \texttt{FTP}.
+\end{itemize}
+
+Ostatecznie wzrost sam w sobie nie zawsze jest decydujący, ale wpływa na dobór roli, która z kolei determinuje kluczowe statystyki gry. Bez uwzględnienia tego kontekstu, zależności między wzrostem a wynikami mogą być mylące. Podsumowując:
+\begin{itemize}
+    \item Wzrost korzystnie wpływa na statystyki związane z grą pod koszem (bloki i zbiórki).
+    \item W przypadku rzutów za trzy i skuteczności osobistych, większe znaczenie ma pozycja zawodnika i jego rola na boisku, na które wzrost ma wpływ pośredni.
+\end{itemize}
+
+Nasza analiza pokazuje, że wpływ wzrostu zawodnika na statystyki gry w koszykówce jest zauważalny, szczególnie w kontekście zbiórek ofensywnych i bloków. Jednak zależności te nie są proste i wymagają uwzględnienia dodatkowych czynników, takich jak pozycja zawodnika oraz wynikające z niej zadania na boisku. W szczególności statystyki związane z rzutami za trzy punkty i skutecznością rzutów osobistych są bardziej zależne od roli zawodnika niż od jego wzrostu. Warto podkreślić, że nasza analiza skupiała się na podstawowych zależnościach i nie obejmowała bardziej szczegółowych czynników, które mogłyby pogłębić te wnioski.
+
+
+
+
+
+
+
+
+
+
